@@ -185,10 +185,10 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
     
     // Swipe to dismiss
     if (_enableSwipeToDismiss) {
-        UISwipeGestureRecognizer *swipeGesture = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(doneButtonPressed:)];
-        swipeGesture.direction = UISwipeGestureRecognizerDirectionDown | UISwipeGestureRecognizerDirectionUp;
-        [self.view addGestureRecognizer:swipeGesture];
-    }
+        UIPanGestureRecognizer *panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(doneButtonPressed:)];
+        [panGesture setMinimumNumberOfTouches:1];
+        [panGesture setMaximumNumberOfTouches:1];
+        [self.view addGestureRecognizer:panGesture];    }
     
 	// Super
     [super viewDidLoad];
@@ -1555,26 +1555,117 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
 
 - (void)doneButtonPressed:(id)sender {
     // Only if we're modal and there's a done button
-    if (_doneButton) {
-        // See if we actually just want to show/hide grid
-        if (self.enableGrid) {
-            if (self.startOnGrid && !_gridController) {
-                [self showGrid:YES];
-                return;
-            } else if (!self.startOnGrid && _gridController) {
-                [self hideGrid];
-                return;
-            }
+    static float firstX, firstY;
+    
+    float viewHeight = _pagingScrollView.frame.size.height;
+    float viewHalfHeight = viewHeight/2;
+    
+    CGPoint translatedPoint = [(UIPanGestureRecognizer*)sender translationInView:self.view];
+    
+    // Gesture Began
+    if ([(UIPanGestureRecognizer*)sender state] == UIGestureRecognizerStateBegan) {
+        [self setControlsHidden:YES animated:YES permanent:YES];
+        
+        firstX = [_pagingScrollView center].x;
+        firstY = [_pagingScrollView center].y;
+        
+        // _senderViewForAnimation.hidden = (_currentPageIndex == _initalPageIndex);
+        
+        [self setNeedsStatusBarAppearanceUpdate];
+    }
+    
+    translatedPoint = CGPointMake(firstX, firstY+translatedPoint.y);
+    [_pagingScrollView setCenter:translatedPoint];
+    
+    float newY = _pagingScrollView.center.y - viewHalfHeight;
+    float newAlpha = 1 - fabsf(newY)/viewHeight; //abs(newY)/viewHeight * 1.8;
+    
+    self.view.opaque = YES;
+    
+    //self.view.backgroundColor = [UIColor colorWithWhite:(_useWhiteBackgroundColor ? 1 : 0) alpha:newAlpha];
+    
+    // Gesture Ended
+    if ([(UIPanGestureRecognizer*)sender state] == UIGestureRecognizerStateEnded) {
+        
+        if(_pagingScrollView.center.y > viewHalfHeight+40 || _pagingScrollView.center.y < viewHalfHeight-40) // Automatic Dismiss View
+        {
+            
+            NSLog(@"AUTOMATIC DISSMISS VIEW");
+            CGFloat finalX = firstX, finalY;
+            UIWindow *appWindow = [[[UIApplication sharedApplication]delegate]window];
+            CGFloat windowsHeigt = appWindow.frame.size.height;
+            
+            if(_pagingScrollView.center.y > viewHalfHeight+30) // swipe down
+            finalY = windowsHeigt*2;
+            else // swipe up
+            finalY = -viewHalfHeight;
+            
+            CGFloat animationDuration = 0.35;
+            [UIView beginAnimations:nil context:NULL];
+            [UIView setAnimationDuration:animationDuration];
+            [UIView setAnimationCurve:UIViewAnimationCurveEaseIn];
+            [UIView setAnimationDelegate:self];
+            [_pagingScrollView setCenter:CGPointMake(finalX, finalY)];
+            self.view.backgroundColor = [UIColor colorWithWhite:0 alpha:0];
+            [UIView commitAnimations];
+            [self performSelector:@selector(dissmissBrowser) withObject:nil afterDelay:animationDuration];
         }
-        // Dismiss view controller
-        if ([_delegate respondsToSelector:@selector(photoBrowserDidFinishModalPresentation:)]) {
-            // Call delegate method and let them dismiss us
-            [_delegate photoBrowserDidFinishModalPresentation:self];
-        } else  {
-            [self dismissViewControllerAnimated:YES completion:nil];
+        else // Continue Showing View
+        {
+            NSLog(@"CONTINUE SHOWING VIEW");
+            [self setNeedsStatusBarAppearanceUpdate];
+            
+            //self.view.backgroundColor = [UIColor colorWithWhite:(_useWhiteBackgroundColor ? 1 : 0) alpha:1];
+            
+            CGFloat velocityY = (.35*[(UIPanGestureRecognizer*)sender velocityInView:self.view].y);
+            
+            CGFloat finalX = firstX;
+            CGFloat finalY = viewHalfHeight;
+            
+            CGFloat animationDuration = (ABS(velocityY)*.0002)+.2;
+            [UIView beginAnimations:nil context:NULL];
+            [UIView setAnimationDuration:animationDuration];
+            [UIView setAnimationCurve:UIViewAnimationCurveEaseOut];
+            [UIView setAnimationDelegate:self];
+            [_pagingScrollView setCenter:CGPointMake(finalX, finalY)];
+            [UIView commitAnimations];
         }
     }
+    /*
+     if (_doneButton) {
+     NSLog(@"done?");
+     // See if we actually just want to show/hide grid
+     if (self.enableGrid) {
+     if (self.startOnGrid && !_gridController) {
+     [self showGrid:YES];
+     return;
+     } else if (!self.startOnGrid && _gridController) {
+     [self hideGrid];
+     return;
+     }
+     }
+     // Dismiss view controller
+     if ([_delegate respondsToSelector:@selector(photoBrowserDidFinishModalPresentation:)]) {
+     // Call delegate method and let them dismiss us
+     [_delegate photoBrowserDidFinishModalPresentation:self];
+     } else  {
+     [self dismissViewControllerAnimated:YES completion:nil];
+     }
+     }
+     */
 }
+
+- (void)dissmissBrowser {
+    self.isPresented = NO;
+    if ([self.delegate respondsToSelector:@selector(photoBrowserDidFinishModalPresentation:)]){
+        [self.delegate photoBrowserDidFinishModalPresentation:self];
+    }
+    else {
+        [self dismissViewControllerAnimated:NO completion:nil];
+    }
+    
+}
+
 
 #pragma mark - Actions
 

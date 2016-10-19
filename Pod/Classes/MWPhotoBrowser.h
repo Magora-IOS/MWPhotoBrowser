@@ -51,6 +51,7 @@
 @property (nonatomic) BOOL startOnGrid;
 @property (nonatomic) BOOL autoPlayOnAppear;
 @property (nonatomic) NSUInteger delayToHideElements;
+@property (nonatomic) BOOL isPresented; 
 @property (nonatomic, readonly) NSUInteger currentIndex;
 
 // Customise image selection icons as they are the only icons with a colour tint
